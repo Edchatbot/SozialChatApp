@@ -2,44 +2,38 @@ package com.example.sozialchatapp
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.sozialchatapp.models.ChatHistoryResponse
-import com.example.sozialchatapp.network.OllamaApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import com.example.sozialchatapp.models.ChatMessage
+import com.example.sozialchatapp.network.RetrofitClient.api
 import kotlinx.coroutines.launch
-import retrofit2.Response
-import retrofit2.Retrofit
-import retrofit2.converter.moshi.MoshiConverterFactory
+
 
 class ChatViewModel : ViewModel() {
+    private val _chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
+    val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages
 
-    // Interner Zustand
-    private val _chatHistory = MutableStateFlow<List<ChatMessage>>(emptyList())
-    val chatHistory: StateFlow<List<ChatMessage>> = _chatHistory
+    fun addUserMessage(text: String) {
+        val newMessage = ChatMessage(text = text, isUser = true)
+        _chatMessages.value += newMessage
+        // Optional: persistieren
+    }
 
-    // Retrofit-Instanz nur einmal erzeugen
-    private val api: OllamaApi = Retrofit.Builder()
-        .baseUrl("http://192.168.178.XX:8000/") // <== IP-Adresse anpassen
-        .addConverterFactory(MoshiConverterFactory.create())
-        .build()
-        .create(OllamaApi::class.java)
+    fun addBotMessage(text: String) {
+        val newMessage = ChatMessage(text = text, isUser = false)
+        _chatMessages.value += newMessage
+        // Optional: persistieren
+    }
 
-    // Daten vom Server laden
-    fun loadChatHistory(user: String = "guest") {
+    fun loadChatHistory(username: String) {
         viewModelScope.launch {
             try {
-                val response: Response<ChatHistoryResponse> = api.getChatHistory(user)
-
-                if (response.isSuccessful) {
-                    val chatList = response.body()?.chats ?: emptyList()
-                    _chatHistory.value = chatList
-                } else {
-                    println("Serverfehler: Code ${response.code()}")
-                }
+                val response = api.getChatHistory(username)
+                _chatMessages.value = response.chats
             } catch (e: Exception) {
-                println("Verbindungsfehler: ${e.message}")
+                e.printStackTrace()
+                // Optional: Fehlerhandling (Snackbar etc.)
             }
         }
     }
 }
-

@@ -9,7 +9,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -17,46 +16,45 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
-import java.util.*
-import androidx.compose.foundation.layout.padding
 import com.example.sozialchatapp.network.GenerateRequest
 import com.example.sozialchatapp.network.RetrofitClient
-import com.example.sozialchatapp.models.ChatEntry
-
+import com.example.sozialchatapp.models.ChatMessage
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
-fun ChatScreen() {
+fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
     var userInput by remember { mutableStateOf("") }
     var isTyping by remember { mutableStateOf(false) }
     var pendingUserMessage by remember { mutableStateOf<String?>(null) }
 
-    val chatMessages = remember { mutableStateListOf<ChatMessage>() }
+    val chatMessages by viewModel.chatMessages.collectAsState()
+
     val keyboardController = LocalSoftwareKeyboardController.current
     val listState = rememberLazyListState()
 
-    // Scroll bei neuer Nachricht
+    // Chathistorie beim Start laden
+    LaunchedEffect(Unit) {
+        viewModel.loadChatHistory("testuser")
+    }
+
+    // Automatisch scrollen bei neuer Nachricht
     LaunchedEffect(chatMessages.size) {
         delay(150)
         listState.animateScrollToItem(chatMessages.size)
         keyboardController?.hide()
     }
 
-    // KI-Antwort über Retrofit
+    // KI-Antwort anfordern bei neuer Benutzereingabe
     LaunchedEffect(pendingUserMessage) {
         val message = pendingUserMessage
         if (message != null) {
             isTyping = true
-
             try {
                 val result = RetrofitClient.api.generateText(GenerateRequest(prompt = message))
-
-                if (result.response != null) {
-                    chatMessages.add(ChatMessage(text = result.response, isUser = false))
-                } else {
-                    chatMessages.add(ChatMessage(text = "Keine Antwort erhalten.", isUser = false))
-                }
+                val reply = result.response // "Keine Antwort erhalten."
+                viewModel.addBotMessage(reply) // ✅ Statt direktem .add()
             } catch (e: Exception) {
-                chatMessages.add(ChatMessage(text = "Fehler: ${e.localizedMessage}", isUser = false))
+                viewModel.addBotMessage("Fehler: ${e.localizedMessage}")
             } finally {
                 isTyping = false
                 pendingUserMessage = null
@@ -64,11 +62,9 @@ fun ChatScreen() {
         }
     }
 
+    // UI Aufbau
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-        //.padding(imePadding)
-        //.padding(bottom = 8.dp)
+        modifier = Modifier.fillMaxSize()
     ) {
         ChatHeader()
 
@@ -78,7 +74,6 @@ fun ChatScreen() {
                 .weight(1f)
                 .background(MaterialTheme.colorScheme.background)
                 .fillMaxSize()
-                //.padding(imePadding)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
             items(chatMessages) { msg ->
@@ -103,20 +98,19 @@ fun ChatScreen() {
                 value = userInput,
                 onValueChange = { userInput = it },
                 placeholder = { Text("Deine Nachricht...") },
-                modifier = Modifier
-                    .weight(1f),
-                shape = RoundedCornerShape(12.dp), // optional für weiche Ecken
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp)
             )
 
             Spacer(modifier = Modifier.width(8.dp))
-            Button(onClick = {
-                if (userInput.isNotBlank()) {
-                    val msg = userInput
-                    chatMessages.add(ChatMessage(text = msg, isUser = true))
-                    userInput = ""
-                    pendingUserMessage = msg
-                }
-            },
+            Button(
+                onClick = {
+                    if (userInput.isNotBlank()) {
+                        viewModel.addUserMessage(userInput) // ✅ Über ViewModel
+                        pendingUserMessage = userInput
+                        userInput = ""
+                    }
+                },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.secondary,
                     contentColor = MaterialTheme.colorScheme.onSecondary,
@@ -128,7 +122,7 @@ fun ChatScreen() {
     }
 }
 
-
+// ---------- Header ----------
 @Composable
 fun ChatHeader() {
     Row(
@@ -138,7 +132,6 @@ fun ChatHeader() {
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        //
         Icon(
             imageVector = Icons.Default.Info,
             contentDescription = "Assistent Icon",
@@ -153,57 +146,14 @@ fun ChatHeader() {
     }
 }
 
-
-
-
-
-
-@Composable
-fun ChatHistoryScreen(viewModel: ChatViewModel = viewModel()) {
-    val chatList by viewModel.chatHistory.collectAsState()
-
-    LaunchedEffect(Unit) {
-        viewModel.loadChatHistory()
-    }
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        items(chatList) { chat ->
-            ChatItem(chat)
-        }
-    }
-}
-
-@Composable
-fun ChatItem(chat: ChatEntry) {
-    Column(modifier = Modifier
-        .padding(8.dp)
-        .fillMaxWidth()) {
-
-        Text("🧑 Prompt:", style = MaterialTheme.typography.labelLarge)
-        Text(chat.prompt)
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text("🤖 Antwort:", style = MaterialTheme.typography.labelLarge)
-        Text(chat.response)
-
-        Spacer(modifier = Modifier.height(8.dp))
-        Divider()
-    }
-}
-
-
-
-
-
-//Chatbubbles
+// ---------- Chatblasen ----------
 @Composable
 fun ChatBubble(message: ChatMessage) {
-    val bubbleColor = if (message.isUser) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f)
+    val bubbleColor = if (message.isUser)
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+    else
+        MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f)
+
     val textColor = MaterialTheme.colorScheme.onBackground
 
     Row(
@@ -228,20 +178,11 @@ fun ChatBubble(message: ChatMessage) {
     }
 }
 
+// ---------- Form der Chatblasen ----------
 fun bubbleShape(isUser: Boolean): Shape {
     return if (isUser) {
-        RoundedCornerShape(
-            topStart = 16.dp,
-            topEnd = 0.dp,
-            bottomEnd = 16.dp,
-            bottomStart = 16.dp
-        )
+        RoundedCornerShape(topStart = 16.dp, topEnd = 0.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
     } else {
-        RoundedCornerShape(
-            topStart = 0.dp,
-            topEnd = 16.dp,
-            bottomEnd = 16.dp,
-            bottomStart = 16.dp
-        )
+        RoundedCornerShape(topStart = 0.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
     }
 }
