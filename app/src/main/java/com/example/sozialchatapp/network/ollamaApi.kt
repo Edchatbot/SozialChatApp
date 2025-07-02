@@ -13,5 +13,5 @@ interface OllamaApi {
     @POST("chat")
     suspend fun generateText(@Body request: GenerateRequest): GenerateResponse
     @GET("chat/history")
-    suspend fun getChatHistory(@Query("user") user: String): ChatHistoryResponse
+    suspend fun getChatHistory(@Query("testuser") user: String): ChatHistoryResponse
 }

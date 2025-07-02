@@ -29,7 +29,7 @@ class ChatViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val response = api.getChatHistory(username)
-                _chatMessages.value = response.chats
+                _chatMessages.value = response.chatList
             } catch (e: Exception) {
                 e.printStackTrace()
                 // Optional: Fehlerhandling (Snackbar etc.)

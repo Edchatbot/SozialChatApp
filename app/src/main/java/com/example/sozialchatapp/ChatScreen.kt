@@ -76,8 +76,8 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                 .fillMaxSize()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
-            items(chatMessages) { msg ->
-                ChatBubble(msg)
+            items(chatMessages) { chatList ->
+                ChatBubble(chatList)
                 Spacer(modifier = Modifier.height(8.dp))
             }
             if (isTyping) {
