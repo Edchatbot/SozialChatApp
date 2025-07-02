@@ -1,38 +1,39 @@
 package com.example.sozialchatapp
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import com.example.sozialchatapp.models.ChatMessage
+import com.example.sozialchatapp.network.GenerateRequest
 import com.example.sozialchatapp.network.RetrofitClient.api
 import kotlinx.coroutines.launch
 
 
 class ChatViewModel : ViewModel() {
-    private val _chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
-    val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages
+    private val _chatHistory = MutableStateFlow<List<ChatMessage>>(emptyList())
+    val chatHistory: StateFlow<List<ChatMessage>> = _chatHistory
 
-    fun addUserMessage(text: String) {
-        val newMessage = ChatMessage(text = text, isUser = true)
-        _chatMessages.value += newMessage
-        // Optional: persistieren
-    }
-
-    fun addBotMessage(text: String) {
-        val newMessage = ChatMessage(text = text, isUser = false)
-        _chatMessages.value += newMessage
-        // Optional: persistieren
-    }
-
-    fun loadChatHistory(username: String) {
+    fun loadChatHistory(user: String) {
         viewModelScope.launch {
             try {
-                val response = api.getChatHistory(username)
-                _chatMessages.value = response.chatList
+                val response = api.getChatHistory(user)
+                _chatHistory.value = response.chatList  // Wichtig!
             } catch (e: Exception) {
-                e.printStackTrace()
-                // Optional: Fehlerhandling (Snackbar etc.)
+                Log.e("ChatViewModel", "Fehler beim Laden des Verlaufs", e)
+            }
+        }
+    }
+
+    fun sendMessage(user: String, prompt: String) {
+        viewModelScope.launch {
+            try {
+                val result = api.generateText(GenerateRequest(prompt = prompt, user = user))
+                val newMessage = ChatMessage(text = String, isUser = Boolean)
+                _chatHistory.value += newMessage  // Chatverlauf lokal erweitern
+            } catch (e: Exception) {
+                Log.e("ChatViewModel", "Fehler beim Senden", e)
             }
         }
     }

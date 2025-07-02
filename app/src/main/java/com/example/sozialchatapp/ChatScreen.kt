@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
@@ -20,107 +19,65 @@ import com.example.sozialchatapp.network.GenerateRequest
 import com.example.sozialchatapp.network.RetrofitClient
 import com.example.sozialchatapp.models.ChatMessage
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
+
 
 @Composable
-fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
+fun ChatScreen(
+    username: String = "guest",  // Username übergeben oder "guest"
+    viewModel: ChatViewModel = viewModel()
+) {
+    val coroutineScope = rememberCoroutineScope()
+    val chatHistory by viewModel.chatHistory.collectAsState()
     var userInput by remember { mutableStateOf("") }
-    var isTyping by remember { mutableStateOf(false) }
-    var pendingUserMessage by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
 
-    val chatMessages by viewModel.chatMessages.collectAsState()
-
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val listState = rememberLazyListState()
-
-    // Chathistorie beim Start laden
+    // 💡 Chat-Verlauf beim ersten Laden holen
     LaunchedEffect(Unit) {
-        viewModel.loadChatHistory("testuser")
+        viewModel.loadChatHistory(username)
     }
 
-    // Automatisch scrollen bei neuer Nachricht
-    LaunchedEffect(chatMessages.size) {
-        delay(150)
-        listState.animateScrollToItem(chatMessages.size)
-        keyboardController?.hide()
-    }
-
-    // KI-Antwort anfordern bei neuer Benutzereingabe
-    LaunchedEffect(pendingUserMessage) {
-        val message = pendingUserMessage
-        if (message != null) {
-            isTyping = true
-            try {
-                val result = RetrofitClient.api.generateText(GenerateRequest(prompt = message))
-                val reply = result.response // "Keine Antwort erhalten."
-                viewModel.addBotMessage(reply) // ✅ Statt direktem .add()
-            } catch (e: Exception) {
-                viewModel.addBotMessage("Fehler: ${e.localizedMessage}")
-            } finally {
-                isTyping = false
-                pendingUserMessage = null
-            }
-        }
-    }
-
-    // UI Aufbau
-    Column(
-        modifier = Modifier.fillMaxSize()
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .padding(16.dp)
     ) {
-        ChatHeader()
-
         LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .weight(1f)
-                .background(MaterialTheme.colorScheme.background)
-                .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.weight(1f).padding(bottom = 16.dp),
+            reverseLayout = false
         ) {
-            items(chatMessages) { chatList ->
-                ChatBubble(chatList)
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-            if (isTyping) {
-                item {
-                    ChatBubble(ChatMessage(text = "Assistent schreibt...", isUser = false))
-                }
+            items(chatHistory) { message ->
+                ChatBubble(message = message)
             }
         }
 
-        Row(
-            modifier = Modifier
-                .background(MaterialTheme.colorScheme.primary)
-                .fillMaxWidth()
-                .height(IntrinsicSize.Min)
-                .padding(8.dp)
-        ) {
-            TextField(
-                value = userInput,
-                onValueChange = { userInput = it },
-                placeholder = { Text("Deine Nachricht...") },
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(12.dp)
-            )
+        OutlinedTextField(
+            value = userInput,
+            onValueChange = { userInput = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Nachricht eingeben") }
+        )
 
-            Spacer(modifier = Modifier.width(8.dp))
-            Button(
-                onClick = {
-                    if (userInput.isNotBlank()) {
-                        viewModel.addUserMessage(userInput) // ✅ Über ViewModel
-                        pendingUserMessage = userInput
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = {
+                if (userInput.isNotBlank()) {
+                    isLoading = true
+                    coroutineScope.launch {
+                        viewModel.sendMessage(username, userInput)
                         userInput = ""
+                        isLoading = false
                     }
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondary,
-                    contentColor = MaterialTheme.colorScheme.onSecondary,
-                )
-            ) {
-                Text("Senden")
-            }
+                }
+            },
+            enabled = !isLoading,
+            modifier = Modifier.align(Alignment.End)
+        ) {
+            Text(if (isLoading) "Wird gesendet..." else "Senden")
         }
     }
 }
+
 
 // ---------- Header ----------
 @Composable
