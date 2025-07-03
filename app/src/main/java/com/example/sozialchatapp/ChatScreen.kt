@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
@@ -30,17 +31,50 @@ fun ChatScreen(
     val coroutineScope = rememberCoroutineScope()
     val chatHistory by viewModel.chatHistory.collectAsState()
     var userInput by remember { mutableStateOf("") }
+    var isTyping by remember { mutableStateOf(false) }
+    var pendingUserMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
+
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val listState = rememberLazyListState()
 
     // 💡 Chat-Verlauf beim ersten Laden holen
     LaunchedEffect(Unit) {
         viewModel.loadChatHistory(username)
     }
 
+    // Automatisch scrollen bei neuer Nachricht
+    LaunchedEffect(chatHistory.size) {
+        delay(150)
+        listState.animateScrollToItem(chatHistory.size)
+        keyboardController?.hide()
+    }
+
+    // KI-Antwort anfordern bei neuer Benutzereingabe
+    LaunchedEffect(pendingUserMessage) {
+        val message = pendingUserMessage
+        if (message != null) {
+            isTyping = true
+            try {
+                val result = RetrofitClient.api.generateText(GenerateRequest(prompt = message, user = user))
+                val reply = result.response // "Keine Antwort erhalten."
+                viewModel.addBotMessage(reply) // ✅ Statt direktem .add()
+            } catch (e: Exception) {
+                viewModel.addBotMessage("Fehler: ${e.localizedMessage}")
+            } finally {
+                isTyping = false
+                pendingUserMessage = null
+            }
+        }
+    }
+
     Column(modifier = Modifier
         .fillMaxSize()
         .padding(16.dp)
     ) {
+
+        ChatHeader()
+
         LazyColumn(
             modifier = Modifier.weight(1f).padding(bottom = 16.dp),
             reverseLayout = false
@@ -64,16 +98,21 @@ fun ChatScreen(
                 if (userInput.isNotBlank()) {
                     isLoading = true
                     coroutineScope.launch {
-                        viewModel.sendMessage(username, userInput)
+                        viewModel.addUserMessage(username, userInput) // ✅ Über ViewModel
+                        pendingUserMessage = userInput
                         userInput = ""
                         isLoading = false
                     }
                 }
             },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondary,
+                contentColor = MaterialTheme.colorScheme.onSecondary,
+            ),
             enabled = !isLoading,
             modifier = Modifier.align(Alignment.End)
         ) {
-            Text(if (isLoading) "Wird gesendet..." else "Senden")
+            Text(if (isLoading) "..." else "Senden")
         }
     }
 }

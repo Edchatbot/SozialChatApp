@@ -15,7 +15,7 @@ object RetrofitClient {
         .build()
 
     private val retrofit = Retrofit.Builder()
-        .baseUrl("http://192.168.178.38:8000/api/") // Meine fastapi
+        .baseUrl("http://xxx.xxx.xxx.xx:xxxx/api/") // Meine fastapi
         .client(client)
         .addConverterFactory(MoshiConverterFactory.create())
         .build()

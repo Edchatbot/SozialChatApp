@@ -26,15 +26,21 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    fun sendMessage(user: String, prompt: String) {
-        viewModelScope.launch {
-            try {
-                val result = api.generateText(GenerateRequest(prompt = prompt, user = user))
-                val newMessage = ChatMessage(text = String, isUser = Boolean)
-                _chatHistory.value += newMessage  // Chatverlauf lokal erweitern
-            } catch (e: Exception) {
-                Log.e("ChatViewModel", "Fehler beim Senden", e)
-            }
+    fun addUserMessage(user: String, text: String) {
+        try {
+            val newMessage = ChatMessage(text = text, isUser = true)
+            _chatHistory.value += newMessage  // Chatverlauf lokal erweitern
+        } catch (e: Exception) {
+            Log.e("ChatViewModel", "Fehler beim Senden", e)
+        }
+    }
+
+    fun addBotMessage(user: String, text: String) {
+        try {
+            val newMessage = ChatMessage(text = text, isUser = false)
+            _chatHistory.value += newMessage  // Chatverlauf lokal erweitern
+        } catch (e: Exception) {
+            Log.e("ChatViewModel", "Fehler beim Senden", e)
         }
     }
 }
